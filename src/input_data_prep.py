@@ -5,52 +5,77 @@ import numpy as np
 import yaml
 
 
-def transform_pdf_to_cdf(prob_values: list):
+def transform_pdf_to_cdf(prob_values: pd.DataFrame):
     """Transform probability density function to cumulative density function
 
     Args:
-        prob_values (list): list of probabilities
+        prob_values (pd.DataFrame): list of probabilities
 
     Returns:
-         quantile_values (list): list of quantile values in cdf
+         quantile_values (pd.DataFrame): list of quantile values in cdf
     """
-    quantiles = np.cumsum(prob_values)
+    quantiles = np.cumsum(prob_values, axis=1)
     return quantiles
 
 
-def get_bin_ranges(prob_values: list, bin_ticks: list):
+def get_bin_ranges(
+    prob_df: pd.DataFrame, 
+    bin_ticks: list,
+    min_prob: float = 0.0,
+    ) -> pd.DataFrame:
     """ Get the ranges of bin values of which the probabilities are not zero
+    if thresholds are not specified 
     This function is useful for the case where the bin values are different
     for different distributions.
 
     Args:
-        prob_values (list): list of probabilities
+        prob_df (pd.DataFrame): probabilities in pdf
         bin_ticks (list): list of bin values as the x-tick in pdf
+        min_prob (float): the lower bound of probability to use
 
     Returns:
-        bin_range (dict): the upper and lower bounds of non-zero bin values
+        bin_range (pd.DataFrame): the upper and lower bounds of bin values
     """
-    # Get the locations of first and last non-zero bin values in the pdf
-    non_zero_prob = np.where(np.array(prob_values) != 0)
-    print(non_zero_prob)
-    first_non_zero = non_zero_prob[0][0]
-    last_non_zero = non_zero_prob[0][-1]
+    # # Get the locations of first and last non-zero bin values in the pdf
+    # prob_to_use = np.where(np.array(prob_values) > min_prob)
+    # print(prob_to_use)
+    # first_non_zero = prob_to_use[0][0]
+    # last_non_zero = prob_to_use[0][-1]
 
-    # Get the bin values of the first and last non-zero bin values
-    bin_range = {
-        "lower": bin_ticks[first_non_zero],
-        "upper": bin_ticks[last_non_zero]
-    }
-    # Todo: consider the matrix case
-    return bin_range
+    # # Get the bin values of the first and last non-zero bin values
+    # bin_range = {
+    #     "lower": bin_ticks[first_non_zero],
+    #     "upper": bin_ticks[last_non_zero]
+    # }
+    # # Todo: consider the matrix case
+    # return bin_range
+
+    prob_to_use = np.where(np.array(prob_df) > min_prob)
+
+    for row in np.unique(prob_to_use[0]):
+        # get the index of first and last row num
+        row_index = np.where(prob_to_use[0]==row)
+        print('row index is', row_index)
+        row_first_index = row_index[0][0]
+        row_last_index = row_index[0][-1]
+
+        column_first_index = prob_to_use[1][row_first_index]
+        column_last_index = prob_to_use[1][row_last_index]
+
+        min_bin = bin_ticks[column_first_index]
+        max_bin = bin_ticks[column_last_index]
+
+        prob_df['min_bin'] = min_bin
+        prob_df['max_bin'] = max_bin
+    
+    return prob_df
 
 
 def sample_quantiles(
         bin_values: list,
         bin_ticks: list,
-        bin_range: dict,
-        quantiles: list
-) -> list:
+        quantiles: pd.DataFrame,
+) -> pd.DataFrame:
     """Sample the quantiles from the cdf based on the user-defined bin values
 
     Args:
@@ -153,5 +178,3 @@ if __name__ == '__main__':
     bin_values = [2, 4, 6]
     sampled_quantiles = sample_quantiles(bin_values, bins, bin_ranges, quantiles)
     print(sampled_quantiles)
-
-    clean_data(file_path, exp_name)
