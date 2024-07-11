@@ -139,6 +139,8 @@ def clean_data(file_path, exp_name):
 
 if __name__ == '__main__':
     # Todo: read yaml file
+    with open("../params/data_params.yaml", "r", encoding="utf-8") as params:
+        params = yaml.safe_load(params)
     file_path = 'D:/PycharmProjects/surrogatepbe'
     exp_name = 'InputMat_231207_1605'
     # X, y = load_raw_data(file_path=file_path, exp_name=exp_name)
