@@ -309,32 +309,6 @@ def prep_data_for_model(
     return input_df, output_df
 
 
-def clean_data(file_path, exp_name):
-    """Loads raw simulated data
-
-    Args:
-        file_path (str): Path of raw data
-        exp_name (str): Name under which training data was saved
-
-    Returns:
-        Tuple: Input matrix for PBE solver, PBE solver results
-    """
-    # Input
-    input_mat = pd.read_csv(f"{file_path}/PBEsolver_InputMatrix/{exp_name}.csv")
-    print("Input matrix shape: ", input_mat.shape)
-    print(type(input_mat))
-
-    # Output
-    results = {}
-    for runID in input_mat["runID"]:
-        try:
-            results[runID] = pd.read_csv(f"{file_path}/PBEsolver_outputs/PBEsolver_{exp_name}_runID{int(runID)}.csv")
-        except:
-            pass
-    print("PBE output files found: ", len(results))
-    return input_mat, results
-
-
 if __name__ == '__main__':
     with open("../params/data_params.yaml", "r", encoding="utf-8") as params:
         data_params = yaml.safe_load(params)
