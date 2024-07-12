@@ -177,7 +177,7 @@ def prep_feature_table(
         feature_columns: list,
         num_sample: int,
         bin_ticks: list,
-):
+) -> tuple:
     """Prepare the input features for certain dataframe containing raw data
 
     Args:
@@ -209,7 +209,36 @@ def prep_feature_table(
     return input_feature_df, sampled_quantiles_array
 
 
+def prep_target_table(
+        df: pd.DataFrame,
+        target_columns: list,
+        sampled_quantiles_array: np.array,
+        bin_ticks: list,
+) -> pd.DataFrame:
+    """Prepare the target features for certain dataframe containing raw data
 
+    Args:
+        df (pd.DataFrame): input dataframe
+        target_columns (list): list of column names to be selected
+        sampled_quantiles_array (np.array): sampled quantile values
+        bin_ticks (list): the bin values as the x-tick in pdf
+
+    Returns:
+        target_feature_df (pd.DataFrame): target feature dataframe
+
+    """
+    # get the target probability dataframe
+    target_prob_df = get_prob_df(df, 'pop_bin')
+    # get the target quantile dataframe
+    target_quantiles_df = transform_pdf_to_cdf(target_prob_df)
+    # get the target bins
+    target_mapped_bins, target_bins_df = get_target_bins(sampled_quantiles_array, bin_ticks, target_quantiles_df)
+    # get the target features
+    target_features = select_columns(df, target_columns)
+    # combine the target features with the target bins
+    target_feature_df = pd.concat([target_features, target_bins_df], axis=1)
+
+    return target_feature_df
 
 
 def clean_data(file_path, exp_name):
