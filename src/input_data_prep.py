@@ -324,7 +324,19 @@ def prep_data_for_model(
 if __name__ == '__main__':
     with open("../params/data_params.yaml", "r", encoding="utf-8") as params:
         data_params = yaml.safe_load(params)
-    file_path, exp_name, num_sample, input_columns, output_columns, bin_start, bin_end, dL, sample_frac = (
+    (
+        file_path,
+        exp_name,
+        num_sample,
+        input_columns,
+        output_columns,
+        bin_start,
+        bin_end,
+        dL,
+        sample_frac,
+        save_path,
+        save_name,
+    ) = (
         data_params["file_path"],
         data_params["experiment_name"],
         data_params["num_sample"],
@@ -333,7 +345,9 @@ if __name__ == '__main__':
         data_params["bin_start"],
         data_params["bin_end"],
         data_params["dL"],
-        data_params["sample_fraction"]
+        data_params["sample_fraction"],
+        data_params["save_path"],
+        data_params["save_name"],
     )
     bin_ticks = np.arange(bin_start, bin_end, dL)
 
@@ -346,6 +360,12 @@ if __name__ == '__main__':
         bin_ticks=bin_ticks,
         sample_frac=sample_frac
     )
+    print(input_df.head())
+    print(output_df.head())
+
+    # Save the input and output data
+    input_df.to_csv(f"{save_path}/PBEsolver_InputMatrix/{save_name}_input.csv", index=False)
+    output_df.to_csv(f"{save_path}/PBEsolver_outputs/{save_name}_output.csv", index=False)
 
 
 
