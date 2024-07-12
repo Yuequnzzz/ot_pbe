@@ -110,7 +110,6 @@ def get_target_bins(
         sampled_quantiles_array: np.array,
         bin_ticks: list,
         target_quantiles_df: pd.DataFrame,
-        target_bin_ticks: list
 ) -> tuple:
     """Get the target bin values based on the sampled quantiles
 
@@ -140,6 +139,24 @@ def get_target_bins(
     return target_mapped_bins, target_bins_df
 
 
+def get_prob_df(
+        df: pd.DataFrame,
+        prefix: str
+) -> pd.DataFrame:
+    """Get the probability density function from the dataframe
+
+    Args:
+        df (pd.DataFrame): input dataframe
+        prefix (str): the prefix of columns to be selected
+
+    Returns:
+        prob_df (pd.DataFrame): dataframe with selected columns
+    """
+    prob_df = df.filter(like=prefix)
+
+    return prob_df
+
+
 def select_columns(
         df: pd.DataFrame, columns: list
 ) -> pd.DataFrame:
@@ -153,6 +170,46 @@ def select_columns(
         df (pd.DataFrame): dataframe with selected columns
     """
     return df[columns]
+
+
+def prep_feature_table(
+        df: pd.DataFrame,
+        feature_columns: list,
+        num_sample: int,
+        bin_ticks: list,
+):
+    """Prepare the input features for certain dataframe containing raw data
+
+    Args:
+        df (pd.DataFrame): input dataframe
+        feature_columns (list): list of column names to be selected
+        num_sample (int): the number of inserted points within certain range
+        bin_ticks (list): the bin values as the x-tick in pdf
+
+    Returns:
+        input_feature_df (pd.DataFrame): input feature dataframe
+        sampled_quantiles_array (np.array): sampled quantile values
+    """
+    # get the probability dataframe
+    prob_df = get_prob_df(df, 'pop_bin')
+    # get the quantile dataframe
+    quantiles_df = transform_pdf_to_cdf(prob_df)
+    # get the bin ranges
+    bin_range_df = get_bin_ranges(prob_df, bin_ticks)
+    # get the sampled bins
+    x_bins, source_bins_df = get_sampled_bins(bin_range_df, num_sample)
+    # get the sampled quantiles
+    sampled_quantiles_array = get_sampled_quantiles(num_sample, x_bins, bin_ticks, quantiles_df)
+
+    # get the other features
+    other_features = select_columns(df, feature_columns)
+    # combine the other features with the sampled bins
+    input_feature_df = pd.concat([other_features, source_bins_df], axis=1)
+
+    return input_feature_df, sampled_quantiles_array
+
+
+
 
 
 def clean_data(file_path, exp_name):
