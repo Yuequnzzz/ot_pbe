@@ -293,6 +293,9 @@ def prep_data_for_model(
             )
             # add time to the input features
             input_features_df = pd.concat([target_sub_df['t'], input_features_df], axis=1)
+            # drop runID
+            input_features_df = input_features_df.drop(columns=['runID'])
+
             input_df_list.append(input_features_df)
 
             # get the target features
