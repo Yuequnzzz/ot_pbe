@@ -367,8 +367,8 @@ if __name__ == '__main__':
     print(output_df.head())
 
     # Save the input and output data
-    input_df.to_csv(f"{save_path}/PBEsolver_InputMatrix/{save_name}_input.csv", index=False)
-    output_df.to_csv(f"{save_path}/PBEsolver_outputs/{save_name}_output.csv", index=False)
+    input_df.to_csv(f"{save_path}/{save_name}_input.csv", index=False)
+    output_df.to_csv(f"{save_path}/{save_name}_output.csv", index=False)
 
 
 
