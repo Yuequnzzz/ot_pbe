@@ -1,5 +1,6 @@
 file_path: 'D:/PycharmProjects/surrogatepbe'
 experiment_name: 'InputMat_231207_1605'
+num_sample: 80
 input_columns:
   - runID
   - T0
@@ -17,3 +18,6 @@ output_columns:
   - c
 time_column: 't'
 sample_fraction: 0.75
+bin_start: 0
+bin_end: 500
+dL: 0.5

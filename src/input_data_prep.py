@@ -323,6 +323,5 @@ if __name__ == '__main__':
     with open("../params/data_params.yaml", "r", encoding="utf-8") as params:
         data_params = yaml.safe_load(params)
     print(data_params['input_columns'])
-    file_path = data_params["file_path"]
-    exp_name = data_params["experiment_name"]
+
 
