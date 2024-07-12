@@ -5,28 +5,27 @@ import numpy as np
 import yaml
 
 
-def transform_pdf_to_cdf(prob_values: pd.DataFrame):
+def transform_pdf_to_cdf(prob_df: pd.DataFrame) -> pd.DataFrame:
     """Transform probability density function to cumulative density function
 
     Args:
-        prob_values (pd.DataFrame): list of probabilities
+        prob_df (pd.DataFrame): list of probabilities
 
     Returns:
          quantile_values (pd.DataFrame): list of quantile values in cdf
     """
-    quantiles = np.cumsum(prob_values, axis=1)
-    return quantiles
+    quantiles_df = np.cumsum(prob_df, axis=1)
+    return quantiles_df
 
 
 def get_bin_ranges(
-    prob_df: pd.DataFrame, 
-    bin_ticks: list,
-    min_prob: float = 0.0,
-    ) -> pd.DataFrame:
-    """ Get the ranges of bin values of which the probabilities are not zero
-    if thresholds are not specified 
-    This function is useful for the case where the bin values are different
-    for different distributions.
+        prob_df: pd.DataFrame,
+        bin_ticks: list,
+        min_prob: float = 0.0,
+) -> pd.DataFrame:
+    """ Get the ranges of bin values of which the probabilities are
+    greater than the minimum probability. This function is useful for
+    the case where the bin values are different for different distributions.
 
     Args:
         prob_df (pd.DataFrame): probabilities in pdf
@@ -34,27 +33,14 @@ def get_bin_ranges(
         min_prob (float): the lower bound of probability to use
 
     Returns:
-        bin_range (pd.DataFrame): the upper and lower bounds of bin values
+        bin_range (pd.DataFrame): upper and lower bounds of bin values for different distributions
     """
-    # # Get the locations of first and last non-zero bin values in the pdf
-    # prob_to_use = np.where(np.array(prob_values) > min_prob)
-    # print(prob_to_use)
-    # first_non_zero = prob_to_use[0][0]
-    # last_non_zero = prob_to_use[0][-1]
-
-    # # Get the bin values of the first and last non-zero bin values
-    # bin_range = {
-    #     "lower": bin_ticks[first_non_zero],
-    #     "upper": bin_ticks[last_non_zero]
-    # }
-    # # Todo: consider the matrix case
-    # return bin_range
-
     prob_to_use = np.where(np.array(prob_df) > min_prob)
 
+    bin_range_df = pd.DataFrame(columns=['min_bin', 'max_bin'])
     for row in np.unique(prob_to_use[0]):
         # get the index of first and last row num
-        row_index = np.where(prob_to_use[0]==row)
+        row_index = np.where(prob_to_use[0] == row)
         print('row index is', row_index)
         row_first_index = row_index[0][0]
         row_last_index = row_index[0][-1]
@@ -65,65 +51,98 @@ def get_bin_ranges(
         min_bin = bin_ticks[column_first_index]
         max_bin = bin_ticks[column_last_index]
 
-        prob_df['min_bin'] = min_bin
-        prob_df['max_bin'] = max_bin
-    
-    return prob_df
+        # Assign the bin values to the dataframe
+        bin_range_df.loc[row] = [min_bin, max_bin]
+
+    return bin_range_df
 
 
-def sample_quantiles(
-        bin_values: list,
+def get_sampled_bins(bin_range_df: pd.DataFrame, num_sample: int) -> tuple:
+    """Generate insertion points for the selected bin values
+
+    Args:
+        bin_range_df (pd.DataFrame): the upper and lower bounds of non-zero bin values
+        num_sample (int): the number of inserted points within certain range
+
+    Returns:
+        x_bins (np.array): ndarray with inserted points
+        source_bins_df (pd.DataFrame): dataframe with inserted points
+    """
+    x_bins = np.linspace(bin_range_df['min_bin'], bin_range_df['max_bin'], num=num_sample)
+    x_bins = np.transpose(x_bins)
+    source_bins_df = pd.DataFrame(x_bins, columns=[f'source_value_{n}' for n in range(num_sample)])
+
+    return x_bins, source_bins_df
+
+
+def get_sampled_quantiles(
+        num_sample: int,
+        x_bins: np.array,
         bin_ticks: list,
-        quantiles: pd.DataFrame,
-) -> pd.DataFrame:
+        quantiles_df: pd.DataFrame,
+) -> np.array:
     """Sample the quantiles from the cdf based on the user-defined bin values
 
     Args:
-        bin_values (list): list of selected bin values
-        bin_ticks (dict): the bin values as the x-tick in pdf
-        bin_range (dict): the upper and lower bounds of non-zero bin values
-        quantiles (list): list of quantile values in cdf
+        num_sample (int): the number of inserted points within certain range
+        x_bins (np.array): list of selected bin values
+        bin_ticks (list): the bin values as the x-tick in pdf
+        quantiles_df (pd.DataFrame): quantile values
 
     Returns:
         sampled_quantiles (list): list of sampled quantile values
 
     """
-    # Get the indices of the bin values in the bin ticks
-    bin_indices = []
-    for bin_val in bin_values:
-        bin_indices.append(bin_ticks.index(bin_val))
-    # Get the corresponding quantile values
-    sampled_quantiles = []
-    for idx in bin_indices:
-        sampled_quantiles.append(quantiles[idx])
+    # interpolate to get the sampled quantiles
+    origin_bins_array = np.tile(bin_ticks, (x_bins.shape[0], 1))
+    sampled_quantiles_array = np.zeros(x_bins.shape)
 
-    return sampled_quantiles
+    for row_num in range(origin_bins_array.shape[0]):
+        sampled_quantiles_array[row_num, :] = np.interp(
+            x_bins[row_num], origin_bins_array[row_num],
+            quantiles_df.iloc[row_num].values
+        )
+
+    return sampled_quantiles_array
 
 
 def get_target_bins(
-        sampled_quantiles: list,
-        target_quantiles: list,
-        target_bin_ticks: list):
+        sampled_quantiles_array: np.array,
+        bin_ticks: list,
+        target_quantiles_df: pd.DataFrame,
+        target_bin_ticks: list
+) -> tuple:
     """Get the target bin values based on the sampled quantiles
 
     Args:
-        sampled_quantiles (list): list of sampled quantile values
-        target_quantiles (list): list of target quantile values
-        target_bin_ticks (list): list of target bin values as the x-tick in pdf
+        sampled_quantiles_array (np.array): sampled quantile values
+        bin_ticks (list): list of bin values as the x-tick in pdf
+        target_quantiles_df (pd.DataFrame): list of target quantile values
 
     Returns:
-        target_bins (list): list of target bin values
+        target_mapped_bins (np.array): mapped target bin values
+        target_bins_df (pd.DataFrame): dataframe with mapped target bin values
     """
-    target_bins = []
-    for quantile in sampled_quantiles:
-        # method 1: approximate to the nearest target quantile
-        # target_bins.append(target_bin_ticks[np.argmin(np.abs(np.array(target_quantiles) - quantile))])
-        # method 2: interpolate the target bin values
-        target_bins.append(np.interp(quantile, target_quantiles, target_bin_ticks))
-    return target_bins
+    # get the mapped bin values in target distribution
+    origin_bins_array = np.tile(bin_ticks, (sampled_quantiles_array.shape[0], 1))
+    target_mapped_bins = np.zeros(sampled_quantiles_array.shape)
+
+    for row_num in range(target_mapped_bins.shape[0]):
+        target_mapped_bins[row_num, :] = np.interp(sampled_quantiles_array[row_num],
+                                                   target_quantiles_df.iloc[row_num].values,
+                                                   origin_bins_array[row_num])
+
+    target_bins_df = pd.DataFrame(
+        target_mapped_bins,
+        columns=[f'target_value_{i}' for i in range(sampled_quantiles_array.shape[1])]
+    )
+
+    return target_mapped_bins, target_bins_df
 
 
-def select_columns(df: pd.DataFrame, columns: list):
+def select_columns(
+        df: pd.DataFrame, columns: list
+) -> pd.DataFrame:
     """Select columns from a dataframe
 
     Args:
