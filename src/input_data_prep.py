@@ -250,7 +250,7 @@ def prep_data_for_model(
         target_columns: list,
         bin_ticks: list,
         sample_frac: float,
-):
+)-> tuple:
     """Prepare the feature tables for the model
 
     Args:
@@ -261,6 +261,11 @@ def prep_data_for_model(
         target_columns (list): list of output column names to be selected
         bin_ticks (list): the bin values as the x-tick in pdf
         sample_frac (float): the fraction of timepoints in each simulation to sample
+
+    Returns:
+        input_df (pd.DataFrame): input feature dataframe
+        output_df (pd.DataFrame): target feature dataframe
+        input_datasets (dict): dictionary containing input and output arrays
     """
     input_mat = pd.read_csv(f"{file_path}/PBEsolver_InputMatrix/{exp_name}.csv")
     print("Input matrix shape: ", input_mat.shape)
@@ -306,7 +311,12 @@ def prep_data_for_model(
     print("Data preparation completed.")
     # TODO: Set the logging
 
-    return input_df, output_df
+    input_datasets = {
+        'X': np.array(input_df),
+        'y': np.array(output_df)
+    }
+
+    return input_df, output_df, input_datasets
 
 
 if __name__ == '__main__':
@@ -315,14 +325,4 @@ if __name__ == '__main__':
     print(data_params['input_columns'])
     file_path = data_params["file_path"]
     exp_name = data_params["experiment_name"]
-    # # X, y = load_raw_data(file_path=file_path, exp_name=exp_name)
-    # prob = [0, 0, 0.1, 0.2, 0.3, 0.4, 0]
-    # bins = [1, 2, 3, 4, 5, 6, 7]
-    # bin_ranges = get_bin_ranges(prob, bins)
-    # print(bin_ranges)
-    # quantiles = transform_pdf_to_cdf(prob)
-    # print(quantiles)
-    # bin_values = [2, 4, 6]
-    # sampled_quantiles = sample_quantiles(bin_values, bins, bin_ranges, quantiles)
-    # print(sampled_quantiles)
 
