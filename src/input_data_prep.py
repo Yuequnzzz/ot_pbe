@@ -21,7 +21,7 @@ def transform_pdf_to_cdf(prob_df: pd.DataFrame) -> pd.DataFrame:
 
 def get_bin_ranges(
         prob_df: pd.DataFrame,
-        bin_ticks: list,
+        bin_ticks: np.ndarray,
         min_prob: float = 0.0,
 ) -> pd.DataFrame:
     """ Get the ranges of bin values of which the probabilities are
@@ -30,7 +30,7 @@ def get_bin_ranges(
 
     Args:
         prob_df (pd.DataFrame): probabilities in pdf
-        bin_ticks (list): list of bin values as the x-tick in pdf
+        bin_ticks (np.ndarray): bin values as the x-tick in pdf
         min_prob (float): the lower bound of probability to use
 
     Returns:
@@ -77,17 +77,15 @@ def get_sampled_bins(bin_range_df: pd.DataFrame, num_sample: int) -> tuple:
 
 
 def get_sampled_quantiles(
-        num_sample: int,
         x_bins: np.array,
-        bin_ticks: list,
+        bin_ticks: np.ndarray,
         quantiles_df: pd.DataFrame,
 ) -> np.array:
     """Sample the quantiles from the cdf based on the user-defined bin values
 
     Args:
-        num_sample (int): the number of inserted points within certain range
         x_bins (np.array): list of selected bin values
-        bin_ticks (list): the bin values as the x-tick in pdf
+        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
         quantiles_df (pd.DataFrame): quantile values
 
     Returns:
@@ -109,14 +107,14 @@ def get_sampled_quantiles(
 
 def get_target_bins(
         sampled_quantiles_array: np.array,
-        bin_ticks: list,
+        bin_ticks: np.ndarray,
         target_quantiles_df: pd.DataFrame,
 ) -> tuple:
     """Get the target bin values based on the sampled quantiles
 
     Args:
         sampled_quantiles_array (np.array): sampled quantile values
-        bin_ticks (list): list of bin values as the x-tick in pdf
+        bin_ticks (np.ndarray): bin values as the x-tick in pdf
         target_quantiles_df (pd.DataFrame): list of target quantile values
 
     Returns:
@@ -177,7 +175,7 @@ def prep_feature_table(
         df: pd.DataFrame,
         feature_columns: list,
         num_sample: int,
-        bin_ticks: list,
+        bin_ticks: np.ndarray,
 ) -> tuple:
     """Prepare the input features for certain dataframe containing raw data
 
@@ -185,7 +183,7 @@ def prep_feature_table(
         df (pd.DataFrame): input dataframe
         feature_columns (list): list of column names to be selected
         num_sample (int): the number of inserted points within certain range
-        bin_ticks (list): the bin values as the x-tick in pdf
+        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
 
     Returns:
         input_feature_df (pd.DataFrame): input feature dataframe
@@ -200,7 +198,10 @@ def prep_feature_table(
     # get the sampled bins
     x_bins, source_bins_df = get_sampled_bins(bin_range_df, num_sample)
     # get the sampled quantiles
-    sampled_quantiles_array = get_sampled_quantiles(num_sample, x_bins, bin_ticks, quantiles_df)
+    sampled_quantiles_array = get_sampled_quantiles(
+        x_bins=x_bins,
+        bin_ticks=bin_ticks,
+        quantiles_df=quantiles_df)
 
     # get the other features
     other_features = select_columns(df, feature_columns)
@@ -214,7 +215,7 @@ def prep_target_table(
         df: pd.DataFrame,
         target_columns: list,
         sampled_quantiles_array: np.array,
-        bin_ticks: list,
+        bin_ticks: np.ndarray,
 ) -> pd.DataFrame:
     """Prepare the target features for certain dataframe containing raw data
 
@@ -222,7 +223,7 @@ def prep_target_table(
         df (pd.DataFrame): input dataframe
         target_columns (list): list of column names to be selected
         sampled_quantiles_array (np.array): sampled quantile values
-        bin_ticks (list): the bin values as the x-tick in pdf
+        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
 
     Returns:
         target_feature_df (pd.DataFrame): target feature dataframe
@@ -248,7 +249,7 @@ def prep_data_for_model(
         num_sample: int,
         source_columns: list,
         target_columns: list,
-        bin_ticks: list,
+        bin_ticks: np.ndarray,
         sample_frac: float,
 )-> tuple:
     """Prepare the feature tables for the model
@@ -259,7 +260,7 @@ def prep_data_for_model(
         num_sample (int): the number of inserted points within certain range
         source_columns (list): list of input column names to be selected
         target_columns (list): list of output column names to be selected
-        bin_ticks (list): the bin values as the x-tick in pdf
+        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
         sample_frac (float): the fraction of timepoints in each simulation to sample
 
     Returns:
@@ -274,6 +275,7 @@ def prep_data_for_model(
     output_df_list = []
     for runID in input_mat["runID"]:
         try:
+            print("Iteration: ", runID)
             # load single simulation output
             target_sub_df = pd.read_csv(f"{file_path}/PBEsolver_outputs/PBEsolver_{exp_name}_runID{int(runID)}.csv")
             # sample the timepoints to avoid overfitting
@@ -322,6 +324,29 @@ def prep_data_for_model(
 if __name__ == '__main__':
     with open("../params/data_params.yaml", "r", encoding="utf-8") as params:
         data_params = yaml.safe_load(params)
-    print(data_params['input_columns'])
+    file_path, exp_name, num_sample, input_columns, output_columns, bin_start, bin_end, dL, sample_frac = (
+        data_params["file_path"],
+        data_params["experiment_name"],
+        data_params["num_sample"],
+        data_params["input_columns"],
+        data_params["output_columns"],
+        data_params["bin_start"],
+        data_params["bin_end"],
+        data_params["dL"],
+        data_params["sample_fraction"]
+    )
+    bin_ticks = np.arange(bin_start, bin_end, dL)
+
+    input_df, output_df, input_datasets = prep_data_for_model(
+        file_path=file_path,
+        exp_name=exp_name,
+        num_sample=num_sample,
+        source_columns=input_columns,
+        target_columns=output_columns,
+        bin_ticks=bin_ticks,
+        sample_frac=sample_frac
+    )
+
+
 
 
