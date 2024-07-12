@@ -1,1 +1,19 @@
 file_path: 'D:/PycharmProjects/surrogatepbe'
+experiment_name: 'InputMat_231207_1605'
+input_columns:
+  - runID
+  - T0
+  - dT
+  - dt
+  - S0
+  - sol_k0
+  - sol_kT
+  - growth_k0
+  - growth_kS
+  - nuc_k0
+  - nuc_kS
+  - ini_mu0
+output_columns:
+  - c
+time_column: 't'
+sample_fraction: 0.75

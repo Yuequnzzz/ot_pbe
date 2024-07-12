@@ -1,4 +1,5 @@
 """This file prepares the input features to the model."""
+import logging
 
 import pandas as pd
 import numpy as np
@@ -241,6 +242,73 @@ def prep_target_table(
     return target_feature_df
 
 
+def prep_data_for_model(
+        file_path: str,
+        exp_name: str,
+        num_sample: int,
+        source_columns: list,
+        target_columns: list,
+        bin_ticks: list,
+        sample_frac: float,
+):
+    """Prepare the feature tables for the model
+
+    Args:
+        file_path (str): Path of raw data
+        exp_name (str): Name under which training data was saved
+        num_sample (int): the number of inserted points within certain range
+        source_columns (list): list of input column names to be selected
+        target_columns (list): list of output column names to be selected
+        bin_ticks (list): the bin values as the x-tick in pdf
+        sample_frac (float): the fraction of timepoints in each simulation to sample
+    """
+    input_mat = pd.read_csv(f"{file_path}/PBEsolver_InputMatrix/{exp_name}.csv")
+    print("Input matrix shape: ", input_mat.shape)
+
+    input_df_list = []
+    output_df_list = []
+    for runID in input_mat["runID"]:
+        try:
+            # load single simulation output
+            target_sub_df = pd.read_csv(f"{file_path}/PBEsolver_outputs/PBEsolver_{exp_name}_runID{int(runID)}.csv")
+            # sample the timepoints to avoid overfitting
+            target_sub_df = target_sub_df.sample(frac=sample_frac)
+            no_timepoints = target_sub_df.shape[0]
+            # get the repeated relevant inputs
+            relevant_inputs = input_mat.query("runID == @runID")[source_columns]
+            repeated_inputs_df = pd.concat([relevant_inputs] * no_timepoints, ignore_index=True)
+            # get the input features
+            input_features_df, sampled_quantiles = prep_feature_table(
+                df=repeated_inputs_df,
+                feature_columns=source_columns,
+                num_sample=num_sample,
+                bin_ticks=bin_ticks,
+            )
+            # add time to the input features
+            input_features_df = pd.concat([target_sub_df['t'], input_features_df], axis=1)
+            input_df_list.append(input_features_df)
+
+            # get the target features
+            target_features = prep_target_table(
+                df=target_sub_df,
+                target_columns=target_columns,
+                sampled_quantiles_array=sampled_quantiles,
+                bin_ticks=bin_ticks
+            )
+            output_df_list.append(target_features)
+
+        except Exception as e:  # TODO: check
+            logging.error(f"Error in loading PBEsolver_{exp_name}_runID{int(runID)}.csv")
+
+    input_df = pd.concat(input_df_list, axis=0, ignore_index=True)
+    output_df = pd.concat(output_df_list, axis=0, ignore_index=True)
+
+    print("Data preparation completed.")
+    # TODO: Set the logging
+
+    return input_df, output_df
+
+
 def clean_data(file_path, exp_name):
     """Loads raw simulated data
 
@@ -268,18 +336,19 @@ def clean_data(file_path, exp_name):
 
 
 if __name__ == '__main__':
-    # Todo: read yaml file
     with open("../params/data_params.yaml", "r", encoding="utf-8") as params:
-        params = yaml.safe_load(params)
-    file_path = 'D:/PycharmProjects/surrogatepbe'
-    exp_name = 'InputMat_231207_1605'
-    # X, y = load_raw_data(file_path=file_path, exp_name=exp_name)
-    prob = [0, 0, 0.1, 0.2, 0.3, 0.4, 0]
-    bins = [1, 2, 3, 4, 5, 6, 7]
-    bin_ranges = get_bin_ranges(prob, bins)
-    print(bin_ranges)
-    quantiles = transform_pdf_to_cdf(prob)
-    print(quantiles)
-    bin_values = [2, 4, 6]
-    sampled_quantiles = sample_quantiles(bin_values, bins, bin_ranges, quantiles)
-    print(sampled_quantiles)
+        data_params = yaml.safe_load(params)
+    print(data_params['input_columns'])
+    file_path = data_params["file_path"]
+    exp_name = data_params["experiment_name"]
+    # # X, y = load_raw_data(file_path=file_path, exp_name=exp_name)
+    # prob = [0, 0, 0.1, 0.2, 0.3, 0.4, 0]
+    # bins = [1, 2, 3, 4, 5, 6, 7]
+    # bin_ranges = get_bin_ranges(prob, bins)
+    # print(bin_ranges)
+    # quantiles = transform_pdf_to_cdf(prob)
+    # print(quantiles)
+    # bin_values = [2, 4, 6]
+    # sampled_quantiles = sample_quantiles(bin_values, bins, bin_ranges, quantiles)
+    # print(sampled_quantiles)
+
