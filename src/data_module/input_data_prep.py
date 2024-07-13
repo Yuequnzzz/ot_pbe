@@ -352,7 +352,7 @@ def prep_data_for_model(
 
 
 if __name__ == '__main__':
-    with open("../../params/data_params.yaml", "r", encoding="utf-8") as params:
+    with open("params/data_params.yaml", "r", encoding="utf-8") as params:
         data_params = yaml.safe_load(params)
     (
         file_path,
