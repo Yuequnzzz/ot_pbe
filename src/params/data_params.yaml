@@ -18,6 +18,8 @@ output_columns:
   - c
 time_column: 't'
 sample_fraction: 0.75
+lower_bound: 0.001
+upper_bound: 0.999
 bin_start: 0
 dL: 0.5
 save_path: 'D:/PycharmProjects/ot_pbe/data/data_cleaning'
