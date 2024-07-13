@@ -19,7 +19,6 @@ output_columns:
 time_column: 't'
 sample_fraction: 0.75
 bin_start: 0
-bin_end: 500
 dL: 0.5
 save_path: 'D:/PycharmProjects/ot_pbe/data/data_cleaning'
-save_name: 'data_cleaned.csv'
+save_name: 'data_cleaned'

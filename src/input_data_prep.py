@@ -42,7 +42,6 @@ def get_bin_ranges(
     for row in np.unique(prob_to_use[0]):
         # get the index of first and last row num
         row_index = np.where(prob_to_use[0] == row)
-        print('row index is', row_index)
         row_first_index = row_index[0][0]
         row_last_index = row_index[0][-1]
 
@@ -175,7 +174,7 @@ def prep_feature_table(
         df: pd.DataFrame,
         feature_columns: list,
         num_sample: int,
-        bin_ticks: np.ndarray,
+        bin_feature: dict
 ) -> tuple:
     """Prepare the input features for certain dataframe containing raw data
 
@@ -183,7 +182,7 @@ def prep_feature_table(
         df (pd.DataFrame): input dataframe
         feature_columns (list): list of column names to be selected
         num_sample (int): the number of inserted points within certain range
-        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
+        bin_feature (dict): include bin_start and the interval length dL
 
     Returns:
         input_feature_df (pd.DataFrame): input feature dataframe
@@ -191,22 +190,40 @@ def prep_feature_table(
     """
     # get the probability dataframe
     prob_df = get_prob_df(df, 'pop_bin')
+    num_bin = prob_df.shape[1]
+    # check if there is null value
+    if prob_df.isnull().values.any():
+        print(f"Found NaN in prob df")
     # get the quantile dataframe
     quantiles_df = transform_pdf_to_cdf(prob_df)
+    if quantiles_df.isnull().values.any():
+        print(f"Found NaN in quantile df")
+
+    # get the bin ticks
+    bin_start_ticks = np.arange(bin_feature['bin_start'],
+                          bin_feature['bin_start']+bin_feature['dL']*(num_bin+1),
+                          bin_feature['dL'])
+    bin_ticks = (bin_start_ticks[1:] + bin_start_ticks[:-1]) / 2
+
     # get the bin ranges
     bin_range_df = get_bin_ranges(prob_df, bin_ticks)
+    if bin_range_df.isnull().values.any():
+        print(f"Found NaN in bin_range df")
     # get the sampled bins
     x_bins, source_bins_df = get_sampled_bins(bin_range_df, num_sample)
+    if source_bins_df.isnull().values.any():
+        print(f"Found NaN in source bin df")
     # get the sampled quantiles
     sampled_quantiles_array = get_sampled_quantiles(
         x_bins=x_bins,
         bin_ticks=bin_ticks,
         quantiles_df=quantiles_df)
-
     # get the other features
-    other_features = select_columns(df, feature_columns)
+    other_features = select_columns(df, feature_columns).reset_index(drop=True)
     # combine the other features with the sampled bins
     input_feature_df = pd.concat([other_features, source_bins_df], axis=1)
+    if input_feature_df.isnull().values.any():
+        print(f"Found NaN in input feature df")
 
     return input_feature_df, sampled_quantiles_array
 
@@ -215,7 +232,7 @@ def prep_target_table(
         df: pd.DataFrame,
         target_columns: list,
         sampled_quantiles_array: np.array,
-        bin_ticks: np.ndarray,
+        bin_feature: dict
 ) -> pd.DataFrame:
     """Prepare the target features for certain dataframe containing raw data
 
@@ -223,7 +240,7 @@ def prep_target_table(
         df (pd.DataFrame): input dataframe
         target_columns (list): list of column names to be selected
         sampled_quantiles_array (np.array): sampled quantile values
-        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
+        bin_feature (dict): include bin_start and the interval length dL
 
     Returns:
         target_feature_df (pd.DataFrame): target feature dataframe
@@ -231,12 +248,22 @@ def prep_target_table(
     """
     # get the target probability dataframe
     target_prob_df = get_prob_df(df, 'pop_bin')
+    num_bin = target_prob_df.shape[1]
     # get the target quantile dataframe
     target_quantiles_df = transform_pdf_to_cdf(target_prob_df)
+    # get the bin ticks
+    bin_start_ticks = np.arange(bin_feature['bin_start'],
+                                bin_feature['bin_start']+bin_feature['dL']*(num_bin+1),
+                                bin_feature['dL'])
+    bin_ticks = (bin_start_ticks[1:] + bin_start_ticks[:-1]) / 2
     # get the target bins
-    target_mapped_bins, target_bins_df = get_target_bins(sampled_quantiles_array, bin_ticks, target_quantiles_df)
+    target_mapped_bins, target_bins_df = get_target_bins(
+        sampled_quantiles_array=sampled_quantiles_array,
+        bin_ticks=bin_ticks,
+        target_quantiles_df=target_quantiles_df
+    )
     # get the target features
-    target_features = select_columns(df, target_columns)
+    target_features = select_columns(df, target_columns).reset_index(drop=True)
     # combine the target features with the target bins
     target_feature_df = pd.concat([target_features, target_bins_df], axis=1)
 
@@ -249,9 +276,9 @@ def prep_data_for_model(
         num_sample: int,
         source_columns: list,
         target_columns: list,
-        bin_ticks: np.ndarray,
+        bin_feature: dict,
         sample_frac: float,
-)-> tuple:
+) -> tuple:
     """Prepare the feature tables for the model
 
     Args:
@@ -260,7 +287,7 @@ def prep_data_for_model(
         num_sample (int): the number of inserted points within certain range
         source_columns (list): list of input column names to be selected
         target_columns (list): list of output column names to be selected
-        bin_ticks (np.ndarray): the bin values as the x-tick in pdf
+        bin_feature (dict): include bin_start and the interval length dL
         sample_frac (float): the fraction of timepoints in each simulation to sample
 
     Returns:
@@ -280,38 +307,57 @@ def prep_data_for_model(
             target_sub_df = pd.read_csv(f"{file_path}/PBEsolver_outputs/PBEsolver_{exp_name}_runID{int(runID)}.csv")
             # sample the timepoints to avoid overfitting
             target_sub_df = target_sub_df.sample(frac=sample_frac)
+            # check if there is Nan
+            if target_sub_df.isnull().values.any():
+                print(f"Found NaN in target runID{int(runID)}")
             no_timepoints = target_sub_df.shape[0]
             # get the repeated relevant inputs
-            relevant_inputs = input_mat.query("runID == @runID")[source_columns]
+            relevant_inputs = input_mat.query("runID == @runID")
             repeated_inputs_df = pd.concat([relevant_inputs] * no_timepoints, ignore_index=True)
+            # check if there is Nan
+            if repeated_inputs_df.isnull().values.any():
+                print(f"Found NaN in repeated inputs runID{int(runID)}")
+                continue
+
             # get the input features
             input_features_df, sampled_quantiles = prep_feature_table(
                 df=repeated_inputs_df,
                 feature_columns=source_columns,
                 num_sample=num_sample,
-                bin_ticks=bin_ticks,
+                bin_feature=bin_feature,
             )
             # add time to the input features
-            input_features_df = pd.concat([target_sub_df['t'], input_features_df], axis=1)
+            t_vec = np.array(target_sub_df["t"])[..., np.newaxis]
+            input_features_df['t'] = t_vec
             # drop runID
             input_features_df = input_features_df.drop(columns=['runID'])
 
+            if input_features_df.isnull().values.any():
+                raise ValueError(f"There is empty values in {runID}")
+
             input_df_list.append(input_features_df)
+            print(len(input_df_list))
 
             # get the target features
             target_features = prep_target_table(
                 df=target_sub_df,
                 target_columns=target_columns,
                 sampled_quantiles_array=sampled_quantiles,
-                bin_ticks=bin_ticks
+                bin_feature=bin_feature
             )
             output_df_list.append(target_features)
 
         except Exception as e:  # TODO: check
-            logging.error(f"Error in loading PBEsolver_{exp_name}_runID{int(runID)}.csv")
+            print(e)
+            raise ValueError("bug!!")
 
     input_df = pd.concat(input_df_list, axis=0, ignore_index=True)
     output_df = pd.concat(output_df_list, axis=0, ignore_index=True)
+
+    if input_df.isnull().values.any():
+        raise ValueError(f"There is empty values in input_df")
+    if output_df.isnull().values.any():
+        raise ValueError(f"There is empty values in output_df")
 
     print("Data preparation completed.")
     # TODO: Set the logging
@@ -334,7 +380,6 @@ if __name__ == '__main__':
         input_columns,
         output_columns,
         bin_start,
-        bin_end,
         dL,
         sample_frac,
         save_path,
@@ -346,13 +391,16 @@ if __name__ == '__main__':
         data_params["input_columns"],
         data_params["output_columns"],
         data_params["bin_start"],
-        data_params["bin_end"],
         data_params["dL"],
         data_params["sample_fraction"],
         data_params["save_path"],
         data_params["save_name"],
     )
-    bin_ticks = np.arange(bin_start, bin_end, dL)
+
+    bin_feature = {
+        'bin_start': bin_start,
+        'dL': dL
+    }
 
     input_df, output_df, input_datasets = prep_data_for_model(
         file_path=file_path,
@@ -360,7 +408,7 @@ if __name__ == '__main__':
         num_sample=num_sample,
         source_columns=input_columns,
         target_columns=output_columns,
-        bin_ticks=bin_ticks,
+        bin_feature=bin_feature,
         sample_frac=sample_frac
     )
     print(input_df.head())
@@ -369,7 +417,3 @@ if __name__ == '__main__':
     # Save the input and output data
     input_df.to_csv(f"{save_path}/{save_name}_input.csv", index=False)
     output_df.to_csv(f"{save_path}/{save_name}_output.csv", index=False)
-
-
-
-
