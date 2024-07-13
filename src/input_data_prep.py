@@ -191,13 +191,8 @@ def prep_feature_table(
     # get the probability dataframe
     prob_df = get_prob_df(df, 'pop_bin')
     num_bin = prob_df.shape[1]
-    # check if there is null value
-    if prob_df.isnull().values.any():
-        print(f"Found NaN in prob df")
     # get the quantile dataframe
     quantiles_df = transform_pdf_to_cdf(prob_df)
-    if quantiles_df.isnull().values.any():
-        print(f"Found NaN in quantile df")
 
     # get the bin ticks
     bin_start_ticks = np.arange(bin_feature['bin_start'],
@@ -207,12 +202,8 @@ def prep_feature_table(
 
     # get the bin ranges
     bin_range_df = get_bin_ranges(prob_df, bin_ticks)
-    if bin_range_df.isnull().values.any():
-        print(f"Found NaN in bin_range df")
     # get the sampled bins
     x_bins, source_bins_df = get_sampled_bins(bin_range_df, num_sample)
-    if source_bins_df.isnull().values.any():
-        print(f"Found NaN in source bin df")
     # get the sampled quantiles
     sampled_quantiles_array = get_sampled_quantiles(
         x_bins=x_bins,
@@ -222,8 +213,6 @@ def prep_feature_table(
     other_features = select_columns(df, feature_columns).reset_index(drop=True)
     # combine the other features with the sampled bins
     input_feature_df = pd.concat([other_features, source_bins_df], axis=1)
-    if input_feature_df.isnull().values.any():
-        print(f"Found NaN in input feature df")
 
     return input_feature_df, sampled_quantiles_array
 
@@ -307,17 +296,10 @@ def prep_data_for_model(
             target_sub_df = pd.read_csv(f"{file_path}/PBEsolver_outputs/PBEsolver_{exp_name}_runID{int(runID)}.csv")
             # sample the timepoints to avoid overfitting
             target_sub_df = target_sub_df.sample(frac=sample_frac)
-            # check if there is Nan
-            if target_sub_df.isnull().values.any():
-                print(f"Found NaN in target runID{int(runID)}")
             no_timepoints = target_sub_df.shape[0]
             # get the repeated relevant inputs
             relevant_inputs = input_mat.query("runID == @runID")
             repeated_inputs_df = pd.concat([relevant_inputs] * no_timepoints, ignore_index=True)
-            # check if there is Nan
-            if repeated_inputs_df.isnull().values.any():
-                print(f"Found NaN in repeated inputs runID{int(runID)}")
-                continue
 
             # get the input features
             input_features_df, sampled_quantiles = prep_feature_table(
@@ -336,7 +318,6 @@ def prep_data_for_model(
                 raise ValueError(f"There is empty values in {runID}")
 
             input_df_list.append(input_features_df)
-            print(len(input_df_list))
 
             # get the target features
             target_features = prep_target_table(
