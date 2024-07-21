@@ -30,8 +30,8 @@ def convert_back_pdf(
     """
     # calculate the difference
     pdf_array = np.diff(quantiles_array, axis=1)
-    # keep the first column of quantiles and stack the pdf values
-    pdf_array = np.hstack([quantiles_array[:, :1], pdf_array])
+    # # keep the first column of quantiles and stack the pdf values
+    # pdf_array = np.hstack([quantiles_array[:, :1], pdf_array])
     # consider the interval
     pdf_array_scaled = pdf_array/dl_array
 
@@ -199,8 +199,8 @@ if __name__ == "__main__":
 
     # model
     start_time = time.time()
-    nodes_per_layer = 80
-    layers = 4
+    nodes_per_layer = 400
+    layers = 8
     model = MLPRegressor(
         hidden_layer_sizes=([nodes_per_layer] * layers),
         alpha=0
@@ -247,12 +247,14 @@ if __name__ == "__main__":
     print(error_metrics)
 
     # plot the results
-    cols = [f"target_value_{i}" for i in range(80)]
+    # TODO: ATTENTION, take out the first bin loc value
+    cols = [f"target_value_{i}" for i in range(1, 80)]
     for i in range(100):
         # get the ith row and cols in the y_test
         y_test_row = y_test.iloc[i][cols]
         # todo: modify the column id when taking out certain features
-        y_pred_row = y_pred[0, 0:-1]
+        # TODO: ATTENTION, take out the first bin loc value
+        y_pred_row = y_pred[i, 1:-1]
         plt.plot(y_test_row, pdf_array[i], label="Actual")
         plt.plot(y_pred_row, pdf_array[i], label="Predicted")
         plt.legend()

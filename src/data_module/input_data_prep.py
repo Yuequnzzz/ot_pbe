@@ -290,7 +290,7 @@ def prep_target_table(
         target_feature_df['mu0'] = num_target_crystals
 
     # get the intervals
-    target_intervals = np.diff(target_mapped_bins)[:, :1]
+    target_intervals = np.diff(target_mapped_bins)
 
     return target_feature_df, target_intervals
 
