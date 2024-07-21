@@ -6,16 +6,18 @@ import numpy as np
 import yaml
 
 
-def transform_pdf_to_cdf(prob_df: pd.DataFrame) -> pd.DataFrame:
+def transform_pdf_to_cdf(prob_df: pd.DataFrame, dL: float) -> pd.DataFrame:
     """Transform probability density function to cumulative density function
 
     Args:
         prob_df (pd.DataFrame): list of probabilities
+        dL (float): the length of interval
 
     Returns:
          quantile_values (pd.DataFrame): list of quantile values in cdf
     """
-    quantiles_df = np.cumsum(prob_df, axis=1)
+    # calculate cumulative sum
+    quantiles_df = np.cumsum(prob_df * dL, axis=1)
     return quantiles_df
 
 
@@ -156,8 +158,8 @@ def get_prob_df(
         num_crystal_array (np.array): the new number of crystals
     """
     prob_df = df.filter(like=prefix)
-    # determine if the sum of probabilities for each row is 1
-    if not np.allclose(prob_df.sum(axis=1), 1):
+    # determine if the sum of probabilities * dL for each row is 1
+    if not np.allclose(prob_df.sum(axis=1), 1 / dL):
         # it is not a probability density function
         num_crystal_array = prob_df.sum(axis=1).values * dL
         prob_df = prob_df.div(num_crystal_array, axis=0)
@@ -208,12 +210,12 @@ def prep_feature_table(
     prob_df, num_crystals = get_prob_df(df, 'pop_bin', bin_feature['dL'])
     num_bin = prob_df.shape[1]
     # get the quantile dataframe
-    quantiles_df = transform_pdf_to_cdf(prob_df)
+    quantiles_df = transform_pdf_to_cdf(prob_df=prob_df, dL=bin_feature['dL'])
 
     # get the bin ticks
     bin_start_ticks = np.arange(bin_feature['bin_start'],
-                          bin_feature['bin_start']+bin_feature['dL']*(num_bin+1),
-                          bin_feature['dL'])
+                                bin_feature['bin_start'] + bin_feature['dL'] * (num_bin + 1),
+                                bin_feature['dL'])
     bin_ticks = (bin_start_ticks[1:] + bin_start_ticks[:-1]) / 2
 
     # get the bin ranges
@@ -238,7 +240,10 @@ def prep_feature_table(
     if num_crystals is not None:
         input_feature_df['ini_mu0'] = num_crystals
 
-    return input_feature_df, sampled_quantiles_array
+    # get the sampled interval lengths
+    sampled_intervals = np.diff(x_bins)[:, :1]
+
+    return input_feature_df, sampled_quantiles_array, sampled_intervals
 
 
 def prep_target_table(
@@ -246,7 +251,7 @@ def prep_target_table(
         target_columns: list,
         sampled_quantiles_array: np.array,
         bin_feature: dict
-) -> pd.DataFrame:
+) -> tuple:
     """Prepare the target features for certain dataframe containing raw data
 
     Args:
@@ -257,19 +262,20 @@ def prep_target_table(
 
     Returns:
         target_feature_df (pd.DataFrame): target feature dataframe
+        target_intervals (np.ndarray): target interval length array
 
     """
     # get the target probability dataframe
     target_prob_df, num_target_crystals = get_prob_df(df, 'pop_bin', bin_feature['dL'])
     num_bin = target_prob_df.shape[1]
     # get the target quantile dataframe
-    target_quantiles_df = transform_pdf_to_cdf(target_prob_df)
+    target_quantiles_df = transform_pdf_to_cdf(target_prob_df, dL=bin_feature['dL'])
     # get the bin ticks
     bin_start_ticks = np.arange(bin_feature['bin_start'],
-                                bin_feature['bin_start']+bin_feature['dL']*(num_bin+1),
+                                bin_feature['bin_start'] + bin_feature['dL'] * (num_bin + 1),
                                 bin_feature['dL'])
     bin_ticks = (bin_start_ticks[1:] + bin_start_ticks[:-1]) / 2
-    # get the target bins
+    # get the target bins todo: get the target intervals
     target_mapped_bins, target_bins_df = get_target_bins(
         sampled_quantiles_array=sampled_quantiles_array,
         bin_ticks=bin_ticks,
@@ -283,7 +289,10 @@ def prep_target_table(
     if num_target_crystals is not None:
         target_feature_df['mu0'] = num_target_crystals
 
-    return target_feature_df
+    # get the intervals
+    target_intervals = np.diff(target_mapped_bins)[:, :1]
+
+    return target_feature_df, target_intervals
 
 
 def prep_data_for_model(
@@ -320,7 +329,8 @@ def prep_data_for_model(
 
     input_df_list = []
     output_df_list = []
-    quantiles_list = []
+    quantiles_all = []
+    interval_list = []
     for runID in input_mat["runID"]:
         try:
             print("Iteration: ", runID)
@@ -334,7 +344,7 @@ def prep_data_for_model(
             repeated_inputs_df = pd.concat([relevant_inputs] * no_timepoints, ignore_index=True)
 
             # get the input features
-            input_features_df, sampled_quantiles = prep_feature_table(
+            input_features_df, sampled_quantiles, sampled_input_intervals = prep_feature_table(
                 df=repeated_inputs_df,
                 feature_columns=source_columns,
                 num_sample=num_sample,
@@ -343,7 +353,7 @@ def prep_data_for_model(
                 quantile_upper_bound=quantile_upper_bound
             )
             # append the quantiles
-            quantiles_list.append(sampled_quantiles)
+            quantiles_all.append(sampled_quantiles)
             # add time to the input features
             t_vec = np.array(target_sub_df["t"])[..., np.newaxis]
             input_features_df['t'] = t_vec
@@ -351,18 +361,19 @@ def prep_data_for_model(
             input_features_df = input_features_df.drop(columns=['runID'])
 
             if input_features_df.isnull().values.any():
-                raise ValueError(f"There is empty values in {runID}")
+                raise ValueError(f"There is empty values in {runID} input")
 
             input_df_list.append(input_features_df)
 
             # get the target features
-            target_features = prep_target_table(
+            target_features, target_intervals = prep_target_table(
                 df=target_sub_df,
                 target_columns=target_columns,
                 sampled_quantiles_array=sampled_quantiles,
                 bin_feature=bin_feature
             )
             output_df_list.append(target_features)
+            interval_list.append(target_intervals)
 
         except Exception as e:  # TODO: check
             print(e)
@@ -370,7 +381,8 @@ def prep_data_for_model(
 
     input_df = pd.concat(input_df_list, axis=0, ignore_index=True)
     output_df = pd.concat(output_df_list, axis=0, ignore_index=True)
-    quantiles_list = np.vstack(quantiles_list)
+    quantiles_all = np.vstack(quantiles_all)
+    interval_all = np.vstack(interval_list)
 
     if input_df.isnull().values.any():
         raise ValueError(f"There is empty values in input_df")
@@ -385,7 +397,7 @@ def prep_data_for_model(
         'y': np.array(output_df)
     }
 
-    return input_df, output_df, input_datasets, quantiles_list
+    return input_df, output_df, input_datasets, quantiles_all, interval_all
 
 
 if __name__ == '__main__':
@@ -424,7 +436,7 @@ if __name__ == '__main__':
         'dL': dL
     }
 
-    input_df, output_df, input_datasets, quantiles = prep_data_for_model(
+    input_df, output_df, input_datasets, quantiles, target_intervals = prep_data_for_model(
         file_path=file_path,
         exp_name=exp_name,
         num_sample=num_sample,
@@ -444,3 +456,8 @@ if __name__ == '__main__':
 
     # Save quantiles
     pd.DataFrame(quantiles).to_csv(f"{save_path}/{save_name}_quantiles.csv", index=False)
+
+    # Save target intervals
+    pd.DataFrame(target_intervals).to_csv(
+        f"{save_path}/{save_name}_target_intervals.csv", index=False
+    )
