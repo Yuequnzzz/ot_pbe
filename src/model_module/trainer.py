@@ -226,11 +226,11 @@ if __name__ == "__main__":
     #
     # print("Duration:", time.time()-start_time)
     #
-    # y_test.to_csv("../../data/data_cleaning/data_cleaned_output_test.csv", index=False)
-    # pd.DataFrame(y_pred).to_csv("../../data/data_cleaning/data_cleaned_output_predicted.csv", index=False)
+    # y_test.to_csv("../../data/data_results/data_output_test.csv", index=False)
+    # pd.DataFrame(y_pred).to_csv("../../data/data_results/data_output_predicted.csv", index=False)
 
     # load the predicted output
-    y_pred = pd.read_csv("../../data/data_cleaning/data_cleaned_output_predicted.csv")
+    y_pred = pd.read_csv("../../data/data_results/data_output_predicted.csv")
     y_pred = y_pred.to_numpy()
 
     # load the quantiles
@@ -261,7 +261,7 @@ if __name__ == "__main__":
         plt.show()
 
 
-# todo: 1. check why some intervals are zero
+# todo: 1. check why some intervals are zero (x)
 # todo: 2. use pytorch
 # todo: 3. try wasserstein distance as the cost function
 # todo: 4. use optuna to tune the hyperparameters
