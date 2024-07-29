@@ -5,6 +5,9 @@ import pandas as pd
 import numpy as np
 import yaml
 
+from scipy.interpolate import interp1d
+from src.utils.utils import handle_inf_values
+
 
 def transform_pdf_to_cdf(prob_df: pd.DataFrame, dL: float) -> pd.DataFrame:
     """Transform probability density function to cumulative density function
@@ -100,10 +103,12 @@ def get_sampled_quantiles(
     sampled_quantiles_array = np.zeros(x_bins.shape)
 
     for row_num in range(origin_bins_array.shape[0]):
-        sampled_quantiles_array[row_num, :] = np.interp(
-            x_bins[row_num], origin_bins_array[row_num],
-            quantiles_df.iloc[row_num].values
+        f = interp1d(
+            origin_bins_array[row_num],
+            quantiles_df.iloc[row_num].values,
+            fill_value='extrapolate'
         )
+        sampled_quantiles_array[row_num, :] = f(x_bins[row_num])
 
     return sampled_quantiles_array
 
@@ -129,9 +134,15 @@ def get_target_bins(
     target_mapped_bins = np.zeros(sampled_quantiles_array.shape)
 
     for row_num in range(target_mapped_bins.shape[0]):
-        target_mapped_bins[row_num, :] = np.interp(sampled_quantiles_array[row_num],
-                                                   target_quantiles_df.iloc[row_num].values,
-                                                   origin_bins_array[row_num])
+        f = interp1d(
+            target_quantiles_df.iloc[row_num].values,
+            origin_bins_array[row_num],
+            fill_value='extrapolate'
+        )
+        target_mapped_bins[row_num, :] = f(sampled_quantiles_array[row_num])
+
+    # handle inf values if any
+    target_mapped_bins = handle_inf_values(target_mapped_bins, sampled_quantiles_array)
 
     target_bins_df = pd.DataFrame(
         target_mapped_bins,
@@ -275,7 +286,7 @@ def prep_target_table(
                                 bin_feature['bin_start'] + bin_feature['dL'] * (num_bin + 1),
                                 bin_feature['dL'])
     bin_ticks = (bin_start_ticks[1:] + bin_start_ticks[:-1]) / 2
-    # get the target bins todo: get the target intervals
+    # get the target bins
     target_mapped_bins, target_bins_df = get_target_bins(
         sampled_quantiles_array=sampled_quantiles_array,
         bin_ticks=bin_ticks,
@@ -291,6 +302,9 @@ def prep_target_table(
 
     # get the intervals
     target_intervals = np.diff(target_mapped_bins)
+    # if target intervals are zero, raise an error at this point
+    if np.any(target_intervals == 0):
+        raise ValueError(f"There are zero intervals in the target.")
 
     return target_feature_df, target_intervals
 
@@ -388,6 +402,11 @@ def prep_data_for_model(
         raise ValueError(f"There is empty values in input_df")
     if output_df.isnull().values.any():
         raise ValueError(f"There is empty values in output_df")
+
+    if np.isinf(input_df.values).any():
+        raise ValueError(f"There are infinite values in input_df")
+    if np.isinf(output_df.values).any():
+        raise ValueError(f"There are infinite values in output_df")
 
     print("Data preparation completed.")
     # TODO: Set the logging

@@ -9,80 +9,14 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolu
 import time
 import matplotlib.pyplot as plt
 
+from src.utils.utils import (
+    convert_back_pdf,
+    get_column_name_id,
+)
+
 
 # from src.model_module.data_processing_for_training import calculate_errors
 # from src.model_module.data_processing_for_training import train_test_NN
-
-
-def convert_back_pdf(
-        quantiles_array: np.ndarray,
-        dl_array: np.ndarray
-) -> np.ndarray:
-    """Convert quantiles back to pdf
-
-    Args:
-        quantiles_array (np.ndarray): Array with quantiles
-        dl_array (float): Array with different intervals
-
-    Returns:
-        pdf_array_scaled (np.ndarray): Array with scaled pdf values
-
-    """
-    # calculate the difference
-    pdf_array = np.diff(quantiles_array, axis=1)
-    # # keep the first column of quantiles and stack the pdf values
-    # pdf_array = np.hstack([quantiles_array[:, :1], pdf_array])
-    # consider the interval
-    pdf_array_scaled = pdf_array/dl_array
-
-    return pdf_array_scaled
-
-
-def calculate_wasserstein_distance(
-        target_true_bins: np.ndarray,
-        target_predicted_bins: np.ndarray,
-        pdf_array: np.ndarray
-) -> np.ndarray:
-    """Calculate the Wasserstein distance between two pdfs
-
-    Args:
-        target_true_bins (np.ndarray): True bins positions
-        target_predicted_bins (np.ndarray): Predicted bins positions
-        pdf_array (np.ndarray): Array with pdf values, either true or predicted
-
-    Returns:
-        wasserstein_distance_matrix (np.ndarray): Wasserstein distance between the two pdfs
-    """
-    wasserstein_distance_matrix = np.zeros(target_true_bins.shape[0])
-    # calculate the wasserstein distance
-    for i in range(target_true_bins.shape[0]):
-        cost_matrix = ot.dist(
-            np.ascontiguousarray(target_true_bins[i].reshape(-1, 1)),
-            np.ascontiguousarray(target_predicted_bins[i].reshape(-1, 1))
-        )
-        wasserstein_distance = ot.emd2(
-            pdf_array[i, :],
-            pdf_array[i, :],
-            cost_matrix
-        )
-        wasserstein_distance_matrix[i] = wasserstein_distance
-
-    return wasserstein_distance_matrix
-
-
-def get_column_name_id(data: pd.DataFrame):
-    """Get the dictionary with the column name and the corresponding column ID
-
-    Args:
-        data (pd.DataFrame): Dataframe with the cleaned data
-
-    Returns:
-        dict: Dictionary with the column name and the corresponding column ID
-    """
-    dict_name_id = {column_name: column_id for column_id, column_name in enumerate(data.columns)}
-
-    return dict_name_id
-
 
 def calculate_error_metrics(
         y_actual: np.ndarray,
@@ -217,48 +151,48 @@ if __name__ == "__main__":
     # get the column name and the corresponding column ID
     dict_name_id = get_column_name_id(y_train)
 
-    # # train the model
-    # model.fit(X_train, y_train)
-    # print("Model trained successfully")
-    # # predict the output
-    # y_pred = model.predict(X_test)
-    # print("Model predicted successfully")
+    # train the model
+    model.fit(X_train, y_train)
+    print("Model trained successfully")
+    # predict the output
+    y_pred = model.predict(X_test)
+    print("Model predicted successfully")
+
+    print("Duration:", time.time()-start_time)
+
+    y_test.to_csv("../../data/data_results/data_output_test.csv", index=False)
+    pd.DataFrame(y_pred).to_csv("../../data/data_results/data_output_predicted.csv", index=False)
+
+    # # load the predicted output
+    # y_pred = pd.read_csv("../../data/data_results/data_output_predicted.csv")
+    # y_pred = y_pred.to_numpy()
     #
-    # print("Duration:", time.time()-start_time)
+    # # load the quantiles
+    # quantiles = pd.read_csv("../../data/data_cleaning/data_cleaned_quantiles.csv")
+    # quantiles_array = quantiles.to_numpy()
     #
-    # y_test.to_csv("../../data/data_results/data_output_test.csv", index=False)
-    # pd.DataFrame(y_pred).to_csv("../../data/data_results/data_output_predicted.csv", index=False)
-
-    # load the predicted output
-    y_pred = pd.read_csv("../../data/data_results/data_output_predicted.csv")
-    y_pred = y_pred.to_numpy()
-
-    # load the quantiles
-    quantiles = pd.read_csv("../../data/data_cleaning/data_cleaned_quantiles.csv")
-    quantiles_array = quantiles.to_numpy()
-
-    # load the intervals
-    target_intervals = pd.read_csv("../../data/data_cleaning/data_cleaned_target_intervals.csv")
-    target_intervals = target_intervals.to_numpy()
-    pdf_array = convert_back_pdf(quantiles_array, dl_array=target_intervals)
-
-    # calculate the error metrics
-    error_metrics = calculate_error_metrics(y_test.to_numpy(), y_pred, pdf_array, dict_name_id)
-    print(error_metrics)
-
-    # plot the results
-    # TODO: ATTENTION, take out the first bin loc value
-    cols = [f"target_value_{i}" for i in range(1, 80)]
-    for i in range(100):
-        # get the ith row and cols in the y_test
-        y_test_row = y_test.iloc[i][cols]
-        # todo: modify the column id when taking out certain features
-        # TODO: ATTENTION, take out the first bin loc value
-        y_pred_row = y_pred[i, 1:-1]
-        plt.plot(y_test_row, pdf_array[i], label="Actual")
-        plt.plot(y_pred_row, pdf_array[i], label="Predicted")
-        plt.legend()
-        plt.show()
+    # # load the intervals
+    # target_intervals = pd.read_csv("../../data/data_cleaning/data_cleaned_target_intervals.csv")
+    # target_intervals = target_intervals.to_numpy()
+    # pdf_array = convert_back_pdf(quantiles_array, dl_array=target_intervals)
+    #
+    # # calculate the error metrics
+    # error_metrics = calculate_error_metrics(y_test.to_numpy(), y_pred, pdf_array, dict_name_id)
+    # print(error_metrics)
+    #
+    # # plot the results
+    # # TODO: ATTENTION, take out the first bin loc value
+    # cols = [f"target_value_{i}" for i in range(0, 80)]
+    # for i in range(100):
+    #     # get the ith row and cols in the y_test
+    #     y_test_row = y_test.iloc[i][cols]
+    #     # todo: modify the column id when taking out certain features
+    #     # TODO: ATTENTION, take out the first bin loc value
+    #     y_pred_row = y_pred[i, 1:-1]
+    #     plt.plot(y_test_row, pdf_array[i], label="Actual")
+    #     plt.plot(y_pred_row, pdf_array[i], label="Predicted")
+    #     plt.legend()
+    #     plt.show()
 
 
 # todo: 1. check why some intervals are zero (x)
